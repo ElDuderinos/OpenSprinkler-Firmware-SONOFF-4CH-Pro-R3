@@ -140,9 +140,15 @@ else if (digitalRead(14) == 0) btn_state = 4;
 
 This ensures the main loop's queue-based station management works correctly and doesn't clear the relay.
 
-### 6. Station Count
+### 6. Station Count and Virtual Stations
 
 `nboards = 1` (8 stations: 4 physical relays + 4 placeholders). Set explicitly in `begin()` for Sonoff, since there are no I2C expanders to auto-detect.
+
+**Problem:** The web UI shows all 8 stations, but only 4 are physical relays on the Sonoff. Stations 5-8 are non-functional placeholders.
+
+**Fix:** Two changes:
+1. **Cap `nstations = 4`** in `begin()`, `iopts_load()`, and `iopts_save()`. This makes the firmware report only 4 stations to the web UI, so stations 5-8 never appear.
+2. **Pre-disable stations 5-8** in `factory_reset()`. On first boot (or after factory reset), stations 5-8 are written to the station data file with `dis=1` (disabled). This ensures they remain disabled even if `nstations` is ever changed back to 8.
 
 ### 7. I2CRTC Skip (`I2CRTC.cpp`)
 

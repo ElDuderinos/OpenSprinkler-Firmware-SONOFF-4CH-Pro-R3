@@ -1082,6 +1082,9 @@ pinModeExt(PIN_BUTTON_3, INPUT_PULLUP);
 	nboards = 0;
 	#endif
 	nstations = nboards*8;
+	#if defined(SONOFF_4CH_PRO_R3)
+	nstations = 4; // Sonoff 4CH Pro R3: only 4 physical relays
+	#endif
 
 	// set rf data pin, unless it is not being used
 	if(PIN_RFTX != 255) {
@@ -2396,6 +2399,15 @@ void OpenSprinkler::factory_reset() {
 			pdata->name[2]='0'+((sid%100)/10);
 			pdata->name[3]='0'+(sid%10);
 		}
+		#if defined(SONOFF_4CH_PRO_R3)
+		// Sonoff 4CH Pro R3: only 4 physical relays; disable stations 5-8 by default
+		if (i >= 4) {
+			StationAttrib at_dis;
+			memset(&at_dis, 0, sizeof(StationAttrib));
+			at_dis.dis = 1;
+			pdata->attrib = at_dis;
+		}
+		#endif
 		file_write_block(STATIONS_FILENAME, pdata, sizeof(StationData)*i, sizeof(StationData));
 	}
 
@@ -2612,6 +2624,9 @@ void OpenSprinkler::iopts_load() {
 	file_read_block(IOPTS_FILENAME, iopts, 0, NUM_IOPTS);
 	nboards = iopts[IOPT_EXT_BOARDS]+1;
 	nstations = nboards * 8;
+	#if defined(SONOFF_4CH_PRO_R3)
+	nstations = 4; // Sonoff 4CH Pro R3: only 4 physical relays
+	#endif
 	status.enabled = iopts[IOPT_DEVICE_ENABLE];
 	iopts[IOPT_FW_VERSION] = OS_FW_VERSION;
 	iopts[IOPT_FW_MINOR] = OS_FW_MINOR;
@@ -2648,6 +2663,9 @@ void OpenSprinkler::iopts_save() {
 	file_write_block(IOPTS_FILENAME, iopts, 0, NUM_IOPTS);
 	nboards = iopts[IOPT_EXT_BOARDS]+1;
 	nstations = nboards * 8;
+	#if defined(SONOFF_4CH_PRO_R3)
+	nstations = 4; // Sonoff 4CH Pro R3: only 4 physical relays
+	#endif
 	status.enabled = iopts[IOPT_DEVICE_ENABLE];
 }
 
