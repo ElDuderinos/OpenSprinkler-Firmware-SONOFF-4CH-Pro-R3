@@ -162,6 +162,37 @@ Removed all `Serial.print()` debug statements from:
 - `ui_state_machine()` (button press logging)
 - Boot relay self-test (4 relay clicks at startup)
 
+### 9. Skip Hardware Auto-Detection (`OpenSprinkler.cpp`)
+
+**Problem:** The upstream firmware's `begin()` performs hardware auto-detection for ESP8266 by scanning I2C addresses to determine the board revision (OS3.0, OS3.1, OS3.2, etc.). During this process, it overwrites `PIN_BUTTON_1` with values from the detected revision (e.g., `V2_PIN_BUTTON_1 = GPIO2`), destroying our `PIN_BUTTON_1 = GPIO14` assignment from `defines.cpp`.
+
+**Impact:** This broke the factory reset code in `options_setup()`, which read `digitalRead(PIN_BUTTON_1)` — now reading GPIO2 instead of GPIO14. Since GPIO2 was not the button, it always read HIGH, causing the factory reset code to be completely skipped.
+
+**Fix:** Wrapped the entire ESP8266 hardware auto-detection block (I2C scanning, pin reassignment, expander detection) in `#if !defined(SONOFF_4CH_PRO_R3)`. For Sonoff builds, `begin()` skips all auto-detection and keeps the statically assigned pins from `defines.cpp`.
+
+### 10. Factory Reset via Physical Button (`OpenSprinkler.cpp`)
+
+**Problem:** The upstream firmware's factory reset during boot relies on `button_read()`, which doesn't work with the Sonoff's independent GPIO buttons. The fork implemented a multi-button sequence for this purpose.
+
+**Fix:** In `options_setup()`, added direct GPIO reading for Sonoff:
+
+**Procedure:**
+1. **Power off** the Sonoff
+2. **Hold physical Button 4** (GPIO14, the button on the blue terminal block)
+3. **Power on** while holding
+4. **Relay 4 blinks** (on for 200ms, off for 200ms) — this means the device detected the button and is counting down. **Keep holding!**
+5. After **~5 blinks** (~2 seconds of actual countdown + boot overhead), **release Button 4**
+6. **All 4 relays turn on for 1 second** — this is the confirmation that reset is happening
+7. The filesystem is formatted (all settings wiped) and the device reboots into **AP mode**
+
+**Technical details:**
+- Hold threshold: **2 seconds** of actual countdown time (reduced from 3 seconds because boot time eats into user hold time)
+- **Wait for release:** After the 2-second threshold is met, the code waits for the button to be released before proceeding. This prevents a boot loop (without this, the device would reboot while the button is still held, detect it again, and reboot again).
+- Uses `ESP.restart()` directly instead of `reboot_dev()`, because `reboot_dev()` calls `lcd_print_line_clear_pgm()` which hangs on Sonoff (no LCD display connected).
+- If the button is released before the blinking countdown completes, the reset is cancelled and Relay 4 turns off. The device boots normally.
+
+This bypasses the upstream's LCD-based `ui_set_options()` flow entirely.
+
 ---
 
 ## Root Cause Analysis
@@ -191,7 +222,9 @@ The reference fork stripped out all I2C code entirely. Without `Wire.begin()`, G
 3. Web UI → Manual Run → test each station 1-4
 4. Press each physical button to toggle its relay
 5. Verify relays stay on until toggled off (not just 60 seconds)
-6. Both `sonoff_4ch_pro_r3` and `os3x_esp8266` builds should succeed
+6. Verify web UI shows only 4 stations (not 8)
+7. **Factory reset test:** Power off, hold Button 4, power on, wait for Relay 4 to blink, release after ~5 blinks, confirm all 4 relays flash for 1 second, then device reboots into AP mode
+8. Both `sonoff_4ch_pro_r3` and `os3x_esp8266` builds should succeed
 
 ---
 

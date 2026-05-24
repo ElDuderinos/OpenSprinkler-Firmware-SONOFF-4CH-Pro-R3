@@ -862,6 +862,7 @@ void OpenSprinkler::begin() {
 
 #if defined(ESP8266) // ESP8266 specific initializations
 
+	#if !defined(SONOFF_4CH_PRO_R3)
 	/* detect hardware revision type */
 	if(detect_i2c(MAIN_I2CADDR)) {	// check if main PCF8574 exists
 		/* assign revision 0 pins */
@@ -994,6 +995,7 @@ void OpenSprinkler::begin() {
 	for(unsigned char i=0;i<(MAX_NUM_BOARDS)/2;i++)
 		expanders[i] = NULL;
 	detect_expanders();
+	#endif // !SONOFF_4CH_PRO_R3
 
 #else
 
@@ -2347,8 +2349,10 @@ void OpenSprinkler::switch_httpstation(HTTPStationData *data, bool turnon, bool 
 void OpenSprinkler::pre_factory_reset() {
 	// for ESP8266: wipe out flash
 	#if defined(ESP8266)
+	#if !defined(SONOFF_4CH_PRO_R3)
 	lcd_print_line_clear_pgm(PSTR("Wiping flash.."), 0);
 	lcd_print_line_clear_pgm(PSTR("Please Wait..."), 1);
+	#endif
 	LittleFS.format();
 	#else
 	// remove 'done' file as an indicator for reset
@@ -2506,6 +2510,47 @@ void OpenSprinkler::options_setup() {
 
 #if defined(ARDUINO)	// handle AVR buttons
 	unsigned char button = BUTTON_NONE; // = button_read(BUTTON_WAIT_NONE);
+
+	#if defined(SONOFF_4CH_PRO_R3)
+	// Sonoff 4CH Pro R3: factory reset via physical Button 4 (GPIO14, logical Button 1)
+	// Procedure: hold Button 4 during power-on for 2+ seconds, then release.
+	// Relay 4 blinks while listening (on for 200ms, off for 200ms) so you can see the countdown.
+	// After release, all 4 relays flash for 1 second to confirm, then the device resets and
+	// reboots into AP mode.
+	if (digitalRead(PIN_BUTTON_1) == 0) {
+		pinMode(PIN_RELAY_4, OUTPUT);
+		unsigned long start = millis();
+		// Countdown: blink Relay 4 for 2 seconds while button is held
+		while(digitalRead(PIN_BUTTON_1) == 0 && (millis() - start) < 2000) {
+			digitalWrite(PIN_RELAY_4, HIGH);
+			delay(200);
+			digitalWrite(PIN_RELAY_4, LOW);
+			delay(200);
+		}
+		if(digitalRead(PIN_BUTTON_1) == 0) {
+			// Held for 2 seconds. Now WAIT for release to avoid boot loop.
+			while(digitalRead(PIN_BUTTON_1) == 0) { delay(50); }
+			// Visual confirmation: flash all 4 relays for 1 second
+			pinMode(PIN_RELAY_1, OUTPUT); digitalWrite(PIN_RELAY_1, HIGH);
+			pinMode(PIN_RELAY_2, OUTPUT); digitalWrite(PIN_RELAY_2, HIGH);
+			pinMode(PIN_RELAY_3, OUTPUT); digitalWrite(PIN_RELAY_3, HIGH);
+			pinMode(PIN_RELAY_4, OUTPUT); digitalWrite(PIN_RELAY_4, HIGH);
+			delay(1000);
+			digitalWrite(PIN_RELAY_1, LOW);
+			digitalWrite(PIN_RELAY_2, LOW);
+			digitalWrite(PIN_RELAY_3, LOW);
+			digitalWrite(PIN_RELAY_4, LOW);
+			// Format filesystem (wipes all settings) and reboot
+			pre_factory_reset();
+			// Use ESP.restart() directly — reboot_dev() hangs on lcd_print_line_clear_pgm()
+			// because there is no LCD display on Sonoff.
+			ESP.restart();
+		} else {
+			// Released early - cancel, ensure Relay 4 is off
+			digitalWrite(PIN_RELAY_4, LOW);
+		}
+	}
+	#endif
 
 	switch(button & BUTTON_MASK) {
 
