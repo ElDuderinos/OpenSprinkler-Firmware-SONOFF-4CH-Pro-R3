@@ -43,6 +43,8 @@ Buttons are independent GPIOs (not a matrix), active LOW with internal pull-ups.
 
 You need [PlatformIO](https://platformio.org/) and a **3.3 V USB-to-TTL serial adapter**.
 
+Pre-built firmware binaries are published on the [Releases](https://github.com/ElDuderinos/OpenSprinkler-Firmware-SONOFF-4CH-Pro-R3/releases) page. Each merge to `master` builds the firmware and creates a new release (you can also run **Build and Release** from the Actions tab).
+
 ### Build
 
 ```bash
