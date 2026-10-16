@@ -2,6 +2,10 @@
 
 name: Build CI and Release
 
+permissions:
+  contents: read
+  packages: write
+  
 on:
   workflow_dispatch:
   push:
